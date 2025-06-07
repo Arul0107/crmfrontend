@@ -54,6 +54,7 @@ const QuotationForm = ({ onCancel, onSave, initialValues }) => {
 
     const quotation = {
       ...values,
+      _id: initialValues?._id, // ✅ Prevent duplicate entry
       date: values.date?.format('YYYY-MM-DD'),
       validUntil: values.validUntil?.format('YYYY-MM-DD'),
       items,
@@ -91,15 +92,7 @@ const QuotationForm = ({ onCancel, onSave, initialValues }) => {
 
   return (
     <Card title={initialValues ? 'Edit Quotation' : 'Create Quotation'} loading={loading}>
-      <Form
-        form={form}
-        layout="vertical"
-        onFinish={(values) => {
-          if (!loading) {
-            onFinish(values);
-          }
-        }}
-      >
+      <Form form={form} layout="vertical" onFinish={onFinish}>
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item label="Business" name="businessId" rules={[{ required: true }]}>
