@@ -91,22 +91,33 @@ const QuotationForm = ({ onCancel, onSave, initialValues }) => {
 
   return (
     <Card title={initialValues ? 'Edit Quotation' : 'Create Quotation'} loading={loading}>
-      <Form form={form} layout="vertical" onFinish={onFinish}>
+      <Form
+        form={form}
+        layout="vertical"
+        onFinish={(values) => {
+          if (!loading) {
+            onFinish(values);
+          }
+        }}
+      >
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item label="Business" name="businessId" rules={[{ required: true }]}>
-              <Select placeholder="Select business" onChange={(id) => {
-                const selected = businessOptions.find(b => b._id === id);
-                if (selected) {
-                  form.setFieldsValue({
-                    businessId: id,
-                    businessName: selected.businessName,
-                    businessType: selected.type,
-                    businessInfo: `${selected.addressLine1}, ${selected.city}, ${selected.state}`,
-                    gstin: selected.gstNumber
-                  });
-                }
-              }}>
+              <Select
+                placeholder="Select business"
+                onChange={(id) => {
+                  const selected = businessOptions.find(b => b._id === id);
+                  if (selected) {
+                    form.setFieldsValue({
+                      businessId: id,
+                      businessName: selected.businessName,
+                      businessType: selected.type,
+                      businessInfo: `${selected.addressLine1}, ${selected.city}, ${selected.state}`,
+                      gstin: selected.gstNumber
+                    });
+                  }
+                }}
+              >
                 {businessOptions.map(b => (
                   <Option key={b._id} value={b._id}>{b.businessName}</Option>
                 ))}
