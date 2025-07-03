@@ -27,7 +27,11 @@ import {
 } from "@ant-design/icons";
 import toast from "react-hot-toast";
 import QuotationFollowUpDrawer from "./QuotationFollowUpDrawer";
-import { downloadQuotationPdf } from "./quotationpdf"; // Import the new utility
+// Corrected import: Import the named export `downloadQuotationPdf`
+import { downloadQuotationPdf } from "./quotationpdf.jsx"; 
+// Removed @react-pdf/renderer imports as they are no longer used:
+// import { PDFDownloadLink } from '@react-pdf/renderer'; 
+// import QuotationPdfContent from './quotationpdf.jsx'; 
 
 const { Text } = Typography;
 
@@ -58,9 +62,6 @@ const QuotationList = ({
     setSelectedQuotation(record);
     setFollowUpDrawerVisible(true);
   };
-
-  // The generateAndDownloadPDF function is now moved to quotationpdf.js
-  // and imported as downloadQuotationPdf.
 
   const formatCurrency = (amount) => {
     const numAmount = parseFloat(amount) || 0;
@@ -242,7 +243,8 @@ const QuotationList = ({
               <Menu.Item
                 key="download"
                 icon={<PrinterOutlined />}
-                onClick={() => downloadQuotationPdf(record)} // Using the imported function
+                // Directly call the named export function
+                onClick={() => downloadQuotationPdf(record)} 
               >
                 Download PDF
               </Menu.Item>
@@ -356,10 +358,11 @@ const QuotationList = ({
         open={viewModalVisible}
         onCancel={() => setViewModalVisible(false)}
         footer={[
+          // Use a regular button to call the named export function
           <Button
             key="download"
             icon={<PrinterOutlined />}
-            onClick={() => downloadQuotationPdf(selectedQuotation)} // Using the imported function
+            onClick={() => downloadQuotationPdf(selectedQuotation)} 
           >
             Download PDF
           </Button>,

@@ -94,7 +94,7 @@ export const appRoutes = [
     ),
   },
   {
-    path: '/products',    // Use plural route here for product list
+    path: '/products',    
     element: (
       <RoleGuard allowedRoles={['Admin', 'Superadmin']}>
         <Product />

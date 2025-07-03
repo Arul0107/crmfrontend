@@ -39,7 +39,6 @@ const Sidebar = ({ collapsed }) => {
           roles: ["Admin", "Superadmin", "Employee"],
           children: [
             { key: "/dashboard/deals", label: "Leads Dashboard", roles: ["Admin", "Superadmin"] },
-            { key: "/dashboard", label: "Quotation Dashboard", roles: ["Admin", "Superadmin", "Employee"] },
             { key: "/invoicedashboard", label: "Invoice Dashboard", roles: ["Admin", "Superadmin", "Employee"] },
           ],
         },
