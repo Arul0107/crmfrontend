@@ -18,7 +18,7 @@ const QuotationPage = () => {
 
   const fetchQuotations = async () => {
     setLoading(true);
-    const toastId = toast.loading("Loading quotations...");
+    const toastId = toast.loading("Loading quotations...");//new
     try {
       const res = await axios.get("/api/quotations");
       setQuotations(res.data);
