@@ -24,6 +24,7 @@ import axios from "../../api/axios";
 import dayjs from "dayjs";
 import toast from "react-hot-toast";
 import { generateQuotationFormStyles } from "./QuotationFormStyles";
+import { v4 as uuidv4 } from 'uuid'; // Import uuid for unique IDs
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -36,18 +37,18 @@ const QuotationForm = ({ onCancel, onSave, initialValues, isSaving }) => {
   const [productOptions, setProductOptions] = useState([]);
   const [items, setItems] = useState([
     {
-      id: 1,
+      id: uuidv4(), // Use uuidv4() for item ID
       productId: null,
+      productName: "", // Add productName to initial state
       description: "",
       hsnSac: "",
       quantity: 1,
       quantityType: "",
       rate: 0,
-      specifications: [{ key: Date.now(), name: "", value: "" }],
+      specifications: [{ key: uuidv4(), name: "", value: "" }], // Use uuidv4() for initial spec key
     },
   ]);
   const [notes, setNotes] = useState([]);
-  // const [loading, setLoading] = useState(false); // Removed, controlled by parent's isSaving
   const [gstType, setGstType] = useState(null);
   const [selectedBusinessDetails, setSelectedBusinessDetails] = useState(null);
 
@@ -98,6 +99,8 @@ ${business.email || ""}
       setProductOptions(
         res.data.map((p) => ({
           ...p,
+          // Ensure product options have a consistent name property
+          productName: p.productName || p.name || "",
           hsnSac: p.hsnSac || "",
           quantityType: p.quantityType || "",
           options: p.options || [],
@@ -122,9 +125,19 @@ ${business.email || ""}
         validUntil: initialValues.validUntil
           ? dayjs(initialValues.validUntil)
           : null,
-        noteText: "",
+        noteText: "", // Clear new note text on load for editing existing quotation
       });
-      setItems(initialValues.items || []);
+      // Ensure initial items and specifications have stable unique keys for React
+      const mappedInitialItems = (initialValues.items || []).map(item => ({
+        ...item,
+        id: item.id || uuidv4(), // Ensure item has an ID, generate if missing
+        productName: item.productName || '', // Ensure productName is present from initialValues
+        specifications: (item.specifications || []).map(spec => ({
+          ...spec,
+          key: spec.key || uuidv4(), // Ensure spec has a key, generate if missing
+        }))
+      }));
+      setItems(mappedInitialItems);
       setNotes(initialValues.notes || []);
       setGstType(initialValues.gstType || null);
 
@@ -162,9 +175,19 @@ ${business.email || ""}
       return;
     }
 
-    // setLoading(true); // Removed, parent's isSaving handles this
-    // The loading toast is now managed by the parent's handleSave
-    // const toastId = toast.loading("Saving quotation...");
+    // --- Start: Validation for Specifications ---
+    for (const item of items) {
+      if (item.specifications && item.specifications.length > 0) {
+        for (const spec of item.specifications) {
+          // If a specification name or value is empty, show error and prevent submission
+          if (!spec.name.trim() || !spec.value.trim()) {
+            toast.error("All specification name and value fields must be filled for all items.");
+            return; // Stop submission
+          }
+        }
+      }
+    }
+    // --- End: Validation for Specifications ---
 
     const timestamp = new Date().toLocaleString();
     const newNote = values.noteText
@@ -175,12 +198,12 @@ ${business.email || ""}
       ...values,
       date: values.date?.format("YYYY-MM-DD"),
       validUntil: values.validUntil?.format("YYYY-MM-DD"),
-      items,
+      items, // 'items' array now includes 'productName'
       notes: newNote ? [...notes, newNote] : notes,
       subTotal: calculateSubTotal(),
       tax: calculateTax(),
       total: calculateTotal(),
-      createdDate: new Date().toLocaleDateString(),
+      createdDate: new Date().toLocaleDateString(), // Consider using ISO string for consistency
       gstType: gstType,
       businessName: selectedBusinessDetails?.businessName,
       businessType: selectedBusinessDetails?.type,
@@ -188,7 +211,6 @@ ${business.email || ""}
       businessInfo: selectedBusinessDetails
         ? formatBusinessInfo(selectedBusinessDetails)
         : "",
-      // Customer details are now included in values from form fields
       customerName: values.customerName,
       customerEmail: values.customerEmail,
     };
@@ -201,23 +223,22 @@ ${business.email || ""}
     } catch (error) {
       // Parent (QuotationPage) will show error toast
       console.error("Error in QuotationForm onFinish:", error);
-    } finally {
-      // setLoading(false); // Removed, parent's isSaving handles this
     }
   };
 
   const addItem = () =>
-    setItems([
-      ...items,
+    setItems((prevItems) => [
+      ...prevItems, // Add to previous items
       {
-        id: Date.now(),
+        id: uuidv4(), // Use uuidv4() for new item
         productId: null,
+        productName: "", // Initialize productName for new item
         description: "",
         hsnSac: "",
         quantity: 1,
         rate: 0,
         quantityType: "",
-        specifications: [{ key: Date.now(), name: "", value: "" }],
+        specifications: [{ key: uuidv4(), name: "", value: "" }], // Use uuidv4() for new spec key
       },
     ]);
 
@@ -230,28 +251,53 @@ ${business.email || ""}
           if (field === "productId") {
             const selectedProduct = productOptions.find((p) => p._id === value);
             if (selectedProduct) {
+              let newSpecifications = item.specifications || []; // Start with current specifications
+
+              // Check if current specifications are empty or just a single blank one
+              const isDefaultSpec =
+                newSpecifications.length === 0 ||
+                (newSpecifications.length === 1 &&
+                  newSpecifications[0].name === "" &&
+                  newSpecifications[0].value === "");
+
+              // If product has options AND current specs are default/empty, then populate from product options
+              if (selectedProduct.options && selectedProduct.options.length > 0 && isDefaultSpec) {
+                newSpecifications = selectedProduct.options.map((opt) => ({
+                  key: uuidv4(), // Generate new unique keys for product-derived specs
+                  name: opt.type || "",
+                  value: opt.description || "",
+                }));
+              } else if (!selectedProduct.options || selectedProduct.options.length === 0) {
+                 // If product has no options and current specs are empty, ensure there's at least one blank
+                 if (newSpecifications.length === 0) {
+                    newSpecifications = [{ key: uuidv4(), name: "", value: "" }];
+                 }
+              }
+              // If selectedProduct.options exist but isDefaultSpec is false,
+              // we don't overwrite existing user-defined specifications.
+
               return {
                 ...item,
                 productId: value,
+                productName: selectedProduct.productName || selectedProduct.name || "", // Store the product name
                 description: selectedProduct.description || "",
                 hsnSac: selectedProduct.hsnSac || "",
                 rate: selectedProduct.price || 0,
                 quantityType: selectedProduct.quantityType || "",
-                specifications:
-                  selectedProduct.options && selectedProduct.options.length > 0
-                    ? selectedProduct.options.map((opt) => ({
-                        key: Date.now() + Math.random(),
-                        name: opt.type || "",
-                        value: opt.description || "",
-                      }))
-                    : [
-                        {
-                          key: Date.now() + Math.random(),
-                          name: "",
-                          value: "",
-                        },
-                      ],
+                specifications: newSpecifications, // Use the determined specifications
               };
+            } else {
+                // If product is deselected (value is null or undefined), clear product-derived fields
+                return {
+                    ...item,
+                    productId: null,
+                    productName: "", // Clear product name on deselection
+                    description: "",
+                    hsnSac: "",
+                    rate: 0,
+                    quantityType: "",
+                    specifications: [{ key: uuidv4(), name: "", value: "" }], // Reset to a single blank spec
+                };
             }
           }
           return { ...item, [field]: value };
@@ -269,7 +315,7 @@ ${business.email || ""}
               ...item,
               specifications: [
                 ...item.specifications,
-                { key: Date.now() + Math.random(), name: "", value: "" },
+                { key: uuidv4(), name: "", value: "" }, // Use uuidv4() for new spec key
               ],
             }
           : item
@@ -295,10 +341,10 @@ ${business.email || ""}
   const updateSpecification = (itemId, specKey, field, value) => {
     setItems((prevItems) =>
       prevItems.map((item) =>
-        item.id === itemId
+        item.id === itemId // Ensure we are updating the correct item
           ? {
               ...item,
-              specifications: item.specifications.map((spec) =>
+              specifications: item.specifications.map((spec) => // Map over the specifications of that item
                 spec.key === specKey ? { ...spec, [field]: value } : spec
               ),
             }
@@ -309,7 +355,7 @@ ${business.email || ""}
 
   const calculateSubTotal = () =>
     items.reduce((sum, i) => sum + (i.quantity || 0) * (i.rate || 0), 0);
-  const calculateTax = () => calculateSubTotal() * 0.18;
+  const calculateTax = () => calculateSubTotal() * 0.18; // Assuming 18% GST
   const calculateTotal = () => calculateSubTotal() + calculateTax();
 
   const handleBusinessSelect = (id) => {
@@ -627,171 +673,171 @@ ${business.email || ""}
                     Specifications
                   </Divider>
                   {item.specifications.map((spec, specIndex) => (
-                    <Row
-                      key={spec.key}
-                      gutter={16}
-                      style={styles.specificationRow}
-                      align="middle"
+                        <Row
+                          key={spec.key}
+                          gutter={16}
+                          style={styles.specificationRow}
+                          align="middle"
+                        >
+                          <Col xs={24} sm={10}>
+                            <Input
+                              placeholder="Specification Name (e.g., Color)"
+                              value={spec.name}
+                              onChange={(e) =>
+                                updateSpecification(
+                                  item.id,
+                                  spec.key,
+                                  "name",
+                                  e.target.value
+                                )
+                              }
+                              style={styles.formField}
+                            />
+                          </Col>
+                          <Col xs={24} sm={10}>
+                            <Input
+                              placeholder="Specification Value (e.g., Blue)"
+                              value={spec.value}
+                              onChange={(e) =>
+                                updateSpecification(
+                                  item.id,
+                                  spec.key,
+                                  "value",
+                                  e.target.value
+                                )
+                              }
+                              style={styles.formField}
+                            />
+                          </Col>
+                          <Col xs={24} sm={4}>
+                            <Space>
+                              {item.specifications.length > 1 && (
+                                <Tooltip title="Remove Specification">
+                                  <Button
+                                    icon={<MinusCircleOutlined />}
+                                    onClick={() =>
+                                      removeSpecification(item.id, spec.key)
+                                    }
+                                    type="text"
+                                    danger
+                                    style={styles.deleteButton}
+                                  />
+                                </Tooltip>
+                              )}
+                              {specIndex === item.specifications.length - 1 && (
+                                <Tooltip title="Add New Specification">
+                                  <Button
+                                    icon={<PlusOutlined />}
+                                    onClick={() => addSpecification(item.id)}
+                                    type="dashed"
+                                    style={styles.addButton}
+                                  />
+                                </Tooltip>
+                              )}
+                            </Space>
+                          </Col>
+                        </Row>
+                      ))}
+                    </>
+                  )}
+                  {/* Only show 'Add Specification' button if there are no specs or the last one is filled */}
+                  {(!item.specifications ||
+                    item.specifications.length === 0 ||
+                    (item.specifications.length > 0 &&
+                      item.specifications[item.specifications.length - 1].name &&
+                      item.specifications[item.specifications.length - 1]
+                        .value)) && (
+                    <Button
+                      onClick={() => addSpecification(item.id)}
+                      block
+                      type="dashed"
+                      style={styles.addSpecButton}
                     >
-                      <Col xs={24} sm={10}>
-                        <Input
-                          placeholder="Specification Name (e.g., Color)"
-                          value={spec.name}
-                          onChange={(e) =>
-                            updateSpecification(
-                              item.id,
-                              spec.key,
-                              "name",
-                              e.target.value
-                            )
-                          }
-                          style={styles.formField}
-                        />
-                      </Col>
-                      <Col xs={24} sm={10}>
-                        <Input
-                          placeholder="Specification Value (e.g., Blue)"
-                          value={spec.value}
-                          onChange={(e) =>
-                            updateSpecification(
-                              item.id,
-                              spec.key,
-                              "value",
-                              e.target.value
-                            )
-                          }
-                          style={styles.formField}
-                        />
-                      </Col>
-                      <Col xs={24} sm={4}>
-                        <Space>
-                          {item.specifications.length > 1 && (
-                            <Tooltip title="Remove Specification">
-                              <Button
-                                icon={<MinusCircleOutlined />}
-                                onClick={() =>
-                                  removeSpecification(item.id, spec.key)
-                                }
-                                type="text"
-                                danger
-                                style={styles.deleteButton}
-                              />
-                            </Tooltip>
-                          )}
-                          {specIndex === item.specifications.length - 1 && (
-                            <Tooltip title="Add New Specification">
-                              <Button
-                                icon={<PlusOutlined />}
-                                onClick={() => addSpecification(item.id)}
-                                type="dashed"
-                                style={styles.addButton}
-                              />
-                            </Tooltip>
-                          )}
-                        </Space>
-                      </Col>
-                    </Row>
-                  ))}
-                </>
-              )}
-              {/* Only show 'Add Specification' button if there are no specs or the last one is filled */}
-              {(!item.specifications ||
-                item.specifications.length === 0 ||
-                (item.specifications.length > 0 &&
-                  item.specifications[item.specifications.length - 1].name &&
-                  item.specifications[item.specifications.length - 1]
-                    .value)) && (
-                <Button
-                  onClick={() => addSpecification(item.id)}
-                  block
-                  type="dashed"
-                  style={styles.addSpecButton}
-                >
-                  + Add Specification
-                </Button>
-              )}
-            </Card>
-          );
-        })}
-        <Button
-          onClick={addItem}
-          block
-          type="dashed"
-          style={styles.addItemButton}
-        >
-          + Add Another Item
-        </Button>
-
-        <Divider style={styles.divider}>Quotation Summary</Divider>
-        <Row gutter={[16, 16]} style={styles.summaryRow}>
-          <Col xs={24} sm={8}>
-            <Form.Item label="Sub Total">
-              <Input
-                readOnly
-                value={`₹${calculateSubTotal().toFixed(2)}`}
-                style={styles.totalField}
-              />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={8}>
-            <Form.Item label="GST (18%)">
-              <Input
-                readOnly
-                value={`₹${calculateTax().toFixed(2)}`}
-                style={styles.totalField}
-              />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={8}>
-            <Form.Item label="Total Amount">
-              <Input
-                readOnly
-                value={`₹${calculateTotal().toFixed(2)}`}
-                style={styles.grandTotalField}
-              />
-            </Form.Item>
-          </Col>
-        </Row>
-
-        {notes.length > 0 && (
-          <Form.Item label="Existing Notes">
-            <Card style={styles.notesCard}>
-              {notes.map((note, index) => (
-                <p key={index} style={styles.noteText}>
-                  <strong>{note.timestamp}:</strong> {note.text}
-                </p>
-              ))}
-            </Card>
-          </Form.Item>
-        )}
-
-        <Form.Item name="noteText" label="Add New Note">
-          <TextArea
-            rows={3}
-            style={styles.textAreaField}
-            placeholder="Add any additional notes, terms, or conditions for this quotation..."
-          />
-        </Form.Item>
-
-        <Form.Item style={styles.buttonGroup}>
-          <Space size="middle">
-            <Button onClick={onCancel} disabled={isSaving} size="large">
-              Cancel
-            </Button>
+                      + Add Specification
+                    </Button>
+                  )}
+                </Card>
+              );
+            })}
             <Button
-              htmlType="submit"
-              type="primary"
-              icon={<SaveOutlined />}
-              loading={isSaving} // Disable button when saving
-              size="large"
+              onClick={addItem}
+              block
+              type="dashed"
+              style={styles.addItemButton}
             >
-              Save Quotation
+              + Add Another Item
             </Button>
-          </Space>
-        </Form.Item>
-      </Form>
-    </Card>
-  );
-};
 
-export default QuotationForm;
+            <Divider style={styles.divider}>Quotation Summary</Divider>
+            <Row gutter={[16, 16]} style={styles.summaryRow}>
+              <Col xs={24} sm={8}>
+                <Form.Item label="Sub Total">
+                  <Input
+                    readOnly
+                    value={`₹${calculateSubTotal().toFixed(2)}`}
+                    style={styles.totalField}
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={8}>
+                <Form.Item label="GST (18%)">
+                  <Input
+                    readOnly
+                    value={`₹${calculateTax().toFixed(2)}`}
+                    style={styles.totalField}
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={8}>
+                <Form.Item label="Total Amount">
+                  <Input
+                    readOnly
+                    value={`₹${calculateTotal().toFixed(2)}`}
+                    style={styles.grandTotalField}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            {notes.length > 0 && (
+              <Form.Item label="Existing Notes">
+                <Card style={styles.notesCard}>
+                  {notes.map((note, index) => (
+                    <p key={index} style={styles.noteText}>
+                      <strong>{note.timestamp}:</strong> {note.text}
+                    </p>
+                  ))}
+                </Card>
+              </Form.Item>
+            )}
+
+            <Form.Item name="noteText" label="Add New Note">
+              <TextArea
+                rows={3}
+                style={styles.textAreaField}
+                placeholder="Add any additional notes, terms, or conditions for this quotation..."
+              />
+            </Form.Item>
+
+            <Form.Item style={styles.buttonGroup}>
+              <Space size="middle">
+                <Button onClick={onCancel} disabled={isSaving} size="large">
+                  Cancel
+                </Button>
+                <Button
+                  htmlType="submit"
+                  type="primary"
+                  icon={<SaveOutlined />}
+                  loading={isSaving} // Disable button when saving
+                  size="large"
+                >
+                  Save Quotation
+                </Button>
+              </Space>
+            </Form.Item>
+          </Form>
+        </Card>
+      );
+    };
+
+    export default QuotationForm;

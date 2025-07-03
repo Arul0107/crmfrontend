@@ -7,9 +7,9 @@ import {
   Tag,
   Input,
   Space,
-  Popconfirm, // Popconfirm is still imported but not used for the dropdown delete
+  Popconfirm,
   Typography,
-  Modal, // Modal is now explicitly used for confirmation
+  Modal,
   Descriptions,
   Divider,
   Dropdown,
@@ -25,10 +25,9 @@ import {
   ScheduleOutlined,
   MoreOutlined,
 } from "@ant-design/icons";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
 import toast from "react-hot-toast";
 import QuotationFollowUpDrawer from "./QuotationFollowUpDrawer";
+import { downloadQuotationPdf } from "./quotationpdf"; // Import the new utility
 
 const { Text } = Typography;
 
@@ -60,76 +59,8 @@ const QuotationList = ({
     setFollowUpDrawerVisible(true);
   };
 
-  const generateAndDownloadPDF = async (record) => {
-    let clone = null;
-    const toastId = toast.loading("Generating PDF...", {
-      position: "top-center",
-    });
-
-    try {
-      const source = document.getElementById(`quotation-${record._id}`);
-      if (!source) {
-        toast.error(
-          "Quotation content not found for PDF generation. Please try again.",
-          { id: toastId }
-        );
-        return;
-      }
-
-      clone = source.cloneNode(true);
-      clone.style.position = "fixed";
-      clone.style.top = "-9999px";
-      clone.style.left = "-9999px";
-      clone.style.width = "210mm";
-      clone.style.padding = "10mm";
-      clone.style.background = "white";
-      clone.style.zIndex = "-1";
-      clone.style.display = "block";
-      document.body.appendChild(clone);
-
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      const canvas = await html2canvas(clone, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-      });
-
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF("p", "mm", "a4");
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-
-      const imgProps = pdf.getImageProperties(imgData);
-      const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
-
-      let position = 0;
-
-      if (imgHeight > pdfHeight) {
-        let heightLeft = imgHeight;
-        while (heightLeft > 0) {
-          pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeight);
-          heightLeft -= pdfHeight;
-          position -= pdfHeight;
-          if (heightLeft > 0) {
-            pdf.addPage();
-          }
-        }
-      } else {
-        pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, imgHeight);
-      }
-
-      pdf.save(`${record.quotationNumber || "quotation"}.pdf`);
-      toast.success("PDF downloaded successfully!", { id: toastId });
-    } catch (err) {
-      console.error("Failed to generate PDF:", err);
-      toast.error("Failed to generate PDF. Please try again.", { id: toastId });
-    } finally {
-      if (clone && document.body.contains(clone)) {
-        document.body.removeChild(clone);
-      }
-    }
-  };
+  // The generateAndDownloadPDF function is now moved to quotationpdf.js
+  // and imported as downloadQuotationPdf.
 
   const formatCurrency = (amount) => {
     const numAmount = parseFloat(amount) || 0;
@@ -311,7 +242,7 @@ const QuotationList = ({
               <Menu.Item
                 key="download"
                 icon={<PrinterOutlined />}
-                onClick={() => generateAndDownloadPDF(record)}
+                onClick={() => downloadQuotationPdf(record)} // Using the imported function
               >
                 Download PDF
               </Menu.Item>
@@ -344,16 +275,15 @@ const QuotationList = ({
               >
                 Edit Quotation
               </Menu.Item>
-              {/* Corrected Delete Action using Modal.confirm */}
               <Menu.Item>
                 <Popconfirm
                   title="Are you sure you want to delete this account?"
-                  onConfirm={() => handleDeleteAccount(record._id)}
+                  onConfirm={() => onDelete(record._id)} // Using onDelete prop
                   okText="Yes"
                   cancelText="No"
                 >
                   <DeleteOutlined />
-                  Delete Account
+                  Delete Quotation
                 </Popconfirm>
               </Menu.Item>
             </Menu>
@@ -429,7 +359,7 @@ const QuotationList = ({
           <Button
             key="download"
             icon={<PrinterOutlined />}
-            onClick={() => generateAndDownloadPDF(selectedQuotation)}
+            onClick={() => downloadQuotationPdf(selectedQuotation)} // Using the imported function
           >
             Download PDF
           </Button>,
@@ -577,124 +507,7 @@ const QuotationList = ({
         )}
       </Modal>
 
-      {/* Hidden elements for PDF generation */}
-      {quotations.map((quotation) => (
-        <div
-          key={quotation._id}
-          id={`quotation-${quotation._id}`}
-          style={{ display: "none" }}
-        >
-          <div style={{ padding: "20px", fontFamily: "Arial, sans-serif" }}>
-            <h2 style={{ textAlign: "center", marginBottom: "20px" }}>
-              QUOTATION
-            </h2>
-
-            <Descriptions column={2} bordered size="small">
-              <Descriptions.Item label="Quotation Number">
-                {quotation.quotationNumber || "N/A"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Date">
-                {quotation.date
-                  ? new Date(quotation.date).toLocaleDateString("en-IN")
-                  : "N/A"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Business Name">
-                {quotation.businessName || "N/A"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Customer Name">
-                {quotation.customerName || "N/A"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Customer Email">
-                {quotation.customerEmail || "N/A"}
-              </Descriptions.Item>
-              <Descriptions.Item label="GSTIN">
-                {quotation.gstin || "N/A"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Business Info" span={2}>
-                <Text style={{ whiteSpace: "pre-wrap" }}>
-                  {quotation.businessInfo || "N/A"}
-                </Text>
-              </Descriptions.Item>
-            </Descriptions>
-
-            {quotation.items?.length > 0 && (
-              <>
-                <h3 style={{ marginTop: "20px", marginBottom: "10px" }}>
-                  Items
-                </h3>
-                <Table
-                  dataSource={quotation.items}
-                  columns={getItemsTableColumns()}
-                  pagination={false}
-                  size="small"
-                  rowKey={(item, idx) => `${quotation._id}-pdf-item-${idx}`}
-                  bordered
-                  expandable={{
-                    expandedRowRender: (item) => (
-                      <div style={{ margin: 0, padding: 0 }}>
-                        {item.specifications?.length > 0 && (
-                          <Descriptions column={1} size="small">
-                            {item.specifications
-                              .filter((spec) => spec.name !== "SPECIFICATION")
-                              .map((spec, i) => (
-                                <Descriptions.Item key={i} label={spec.name}>
-                                  {spec.value}
-                                </Descriptions.Item>
-                              ))}
-                          </Descriptions>
-                        )}
-                      </div>
-                    ),
-                    rowExpandable: (item) => item.specifications?.length > 0,
-                  }}
-                  summary={(pageData) => {
-                    const totalAmount = pageData.reduce(
-                      (sum, item) =>
-                        sum + (item.quantity || 0) * (item.rate || 0),
-                      0
-                    );
-                    return (
-                      <Table.Summary>
-                        <Table.Summary.Row>
-                          <Table.Summary.Cell index={0} colSpan={5}>
-                            <Text strong>Grand Total:</Text>
-                          </Table.Summary.Cell>
-                          <Table.Summary.Cell index={5}>
-                            <Text strong style={{ color: "#52c41a" }}>
-                              {formatCurrency(totalAmount)}
-                            </Text>
-                          </Table.Summary.Cell>
-                        </Table.Summary.Row>
-                      </Table.Summary>
-                    );
-                  }}
-                />
-              </>
-            )}
-
-            {quotation.notes?.length > 0 && (
-              <>
-                <h3 style={{ marginTop: "20px", marginBottom: "10px" }}>
-                  Notes
-                </h3>
-                {quotation.notes.map((note, index) => (
-                  <div key={index} style={{ marginBottom: 8 }}>
-                    <Text italic>"{note.text}"</Text>
-                    <br />
-                    <Text type="secondary" style={{ fontSize: "0.8em" }}>
-                      — {note.author} on{" "}
-                      {note.timestamp ||
-                        new Date(quotation.createdAt).toLocaleDateString(
-                          "en-IN"
-                        )}
-                    </Text>
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
-        </div>
-      ))}
+      {/* Hidden elements for PDF generation are no longer needed here as content is generated dynamically in quotationpdf.js */}
 
       {selectedQuotation && (
         <QuotationFollowUpDrawer
