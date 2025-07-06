@@ -27,11 +27,8 @@ import {
 } from "@ant-design/icons";
 import toast from "react-hot-toast";
 import QuotationFollowUpDrawer from "./QuotationFollowUpDrawer";
-// Corrected import: Import the named export `downloadQuotationPdf`
-import { downloadQuotationPdf } from "./quotationpdf.jsx"; 
-// Removed @react-pdf/renderer imports as they are no longer used:
-// import { PDFDownloadLink } from '@react-pdf/renderer'; 
-// import QuotationPdfContent from './quotationpdf.jsx'; 
+import { downloadQuotationPdf } from "./quotationpdf.jsx";
+
 
 const { Text } = Typography;
 
@@ -77,6 +74,16 @@ const QuotationList = ({
       width: 60,
       align: "center",
       render: (_, __, index) => index + 1,
+    },
+    {
+      title: "Product Name", // New column for Product Name
+      dataIndex: "productName",
+      ellipsis: true,
+      render: (text, record) => {
+        // Log the item to inspect its properties
+        console.log("Item in QuotationList:", record);
+        return text || record.name || "N/A"; // Use productName or fallback to name
+      },
     },
     {
       title: "Description",
@@ -140,19 +147,23 @@ const QuotationList = ({
     },
     {
       title: "Customer",
-      dataIndex: "customerName",
+      dataIndex: "customerName", // Keep dataIndex for sorting/filtering consistency
       render: (text, record) => (
         <div>
-          <div>{text || "N/A"}</div>
-          {record.customerEmail && (
+          {/* Display contactName from populated businessId, fallback to customerName */}
+          <div>{record.businessId?.contactName || text || "N/A"}</div>
+          {/* Display email from populated businessId, fallback to customerEmail */}
+          {(record.businessId?.email || record.customerEmail) && (
             <div style={{ fontSize: 12, color: "#666" }}>
-              {record.customerEmail}
+              {record.businessId?.email || record.customerEmail}
             </div>
           )}
         </div>
       ),
       sorter: (a, b) =>
-        (a.customerName || "").localeCompare(b.customerName || ""),
+        (a.businessId?.contactName || a.customerName || "").localeCompare(
+          b.businessId?.contactName || b.customerName || ""
+        ),
     },
     {
       title: "Items Count",
@@ -244,7 +255,7 @@ const QuotationList = ({
                 key="download"
                 icon={<PrinterOutlined />}
                 // Directly call the named export function
-                onClick={() => downloadQuotationPdf(record)} 
+                onClick={() => downloadQuotationPdf(record)}
               >
                 Download PDF
               </Menu.Item>
@@ -362,7 +373,7 @@ const QuotationList = ({
           <Button
             key="download"
             icon={<PrinterOutlined />}
-            onClick={() => downloadQuotationPdf(selectedQuotation)} 
+            onClick={() => downloadQuotationPdf(selectedQuotation)}
           >
             Download PDF
           </Button>,
@@ -388,12 +399,19 @@ const QuotationList = ({
               <Descriptions.Item label="Business Name">
                 {selectedQuotation.businessName || "N/A"}
               </Descriptions.Item>
-              <Descriptions.Item label="Customer Name">
-                {selectedQuotation.customerName || "N/A"}
+              <Descriptions.Item label="Contact Person">
+                {/* Updated to use contactName from populated businessId */}
+                {selectedQuotation.businessId?.contactName || selectedQuotation.customerName || "N/A"}
               </Descriptions.Item>
               <Descriptions.Item label="Customer Email">
-                {selectedQuotation.customerEmail || "N/A"}
+                {/* Updated to use email from populated businessId */}
+                {selectedQuotation.businessId?.email || selectedQuotation.customerEmail || "N/A"}
               </Descriptions.Item>
+              <Descriptions.Item label="Mobile Number">
+                {/* Prioritize mobileNumber from quotation, then businessId's mobileNumber, then businessId's phone */}
+                {selectedQuotation.mobileNumber || selectedQuotation.businessId?.mobileNumber || selectedQuotation.businessId?.phone || "N/A"}
+              </Descriptions.Item>
+              
               <Descriptions.Item label="GSTIN">
                 <Text code>{selectedQuotation.gstin || "N/A"}</Text>
               </Descriptions.Item>
@@ -462,10 +480,10 @@ const QuotationList = ({
                     return (
                       <Table.Summary fixed>
                         <Table.Summary.Row>
-                          <Table.Summary.Cell index={0} colSpan={5}>
+                          <Table.Summary.Cell index={0} colSpan={6}> {/* Adjusted colSpan */}
                             <Text strong>Grand Total:</Text>
                           </Table.Summary.Cell>
-                          <Table.Summary.Cell index={5}>
+                          <Table.Summary.Cell index={6}> {/* Adjusted index */}
                             <Text strong style={{ color: "#52c41a" }}>
                               {formatCurrency(totalAmount)}
                             </Text>

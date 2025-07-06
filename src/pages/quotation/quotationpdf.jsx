@@ -1,9 +1,15 @@
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import toast from "react-hot-toast";
-import Logo from '../../assets/Primary Logo 01.png';
+import Logo from '../../assets/Primary Logo 01.png'; // Ensure this path is correct
 
 // Helper functions
+
+/**
+ * Formats a number as Indian currency (₹).
+ * @param {number} amount - The amount to format.
+ * @returns {string} The formatted currency string.
+ */
 const formatCurrency = (amount) => {
   const numAmount = parseFloat(amount) || 0;
   return `₹${numAmount.toLocaleString("en-IN", {
@@ -12,6 +18,12 @@ const formatCurrency = (amount) => {
   })}`;
 };
 
+/**
+ * Converts a number into words (Indian numbering system).
+ * Supports up to Crores and handles decimal Paisa.
+ * @param {number} num - The number to convert.
+ * @returns {string} The number in words.
+ */
 const convertNumberToWords = (num) => {
   if (typeof num !== "number" || isNaN(num)) return "N/A";
   let number = Math.floor(num);
@@ -34,6 +46,7 @@ const convertNumberToWords = (num) => {
   if (number === 0) {
     words.push("Zero");
   } else {
+    // Handle the first three digits (hundreds, tens, units)
     let lastThree = number % 1000;
     if (lastThree > 0) {
       if (lastThree < 100) {
@@ -42,44 +55,66 @@ const convertNumberToWords = (num) => {
         words.push(units[Math.floor(lastThree / 100)] + " Hundred" + (lastThree % 100 !== 0 ? " " + numToWords(lastThree % 100) : ""));
       }
     }
-    number = Math.floor(number / 1000);
+    number = Math.floor(number / 1000); // Remove the last three digits
 
+    // Handle thousands, lakhs, crores
     while (number > 0) {
-      let chunk = number % 100;
+      let chunk = number % 100; // Take two digits for Indian system (e.g., 23 Lakh)
       if (chunk > 0) {
         words.push(numToWords(chunk) + " " + scales[++i]);
       } else {
-        i++;
+        i++; // Increment scale even if chunk is zero to maintain correct scale for next iteration
       }
-      number = Math.floor(number / 100);
+      number = Math.floor(number / 100); // Move to the next two digits
     }
   }
 
+  // Reverse and join the words, filter out any empty strings
   const finalWords = words.reverse().filter(Boolean).join(" ").trim();
   let result = finalWords ? finalWords + " Rupees" : "Zero Rupees";
 
+  // Add paisa if there's a decimal part
   if (decimal > 0) {
     result += ` and ${numToWords(decimal)} Paisa`;
   }
   result += " Only";
 
+  // Replace multiple spaces with a single space
   return result.replace(/\s+/g, ' ');
 };
 
+/**
+ * Generates the HTML content for the quotation PDF.
+ * This function creates two main HTML strings for Page 1 and Page 2 of the quotation.
+ * @param {object} quotation - The quotation data object.
+ * @returns {{page1Html: string, page2Html: string}} An object containing the HTML strings for each page.
+ */
 const generateQuotationHtmlParts = (quotation) => {
+  // Calculate sub-total, GST, and total bill amount
   const subTotalAmount = quotation.items?.reduce(
     (sum, item) => sum + (item.quantity || 0) * (item.rate || 0),
     0
   ) || 0;
 
+  // Assuming a fixed GST rate of 18% for now, as per the original code's calculation logic.
+  // If GST is dynamic or per-item, this calculation needs to be updated based on the `quotation` object.
   const gstRate = 0.18;
   const gstAmount = subTotalAmount * gstRate;
   const billAmount = subTotalAmount + gstAmount;
 
+  // Paths for company logo and signature. Assuming Logo can be used for both.
   const companyLogoSrc = Logo;
-  const signatureImageSrc = "YOUR_SIGNATURE_IMAGE_BASE64_DATA_URL_HERE";
+  const signatureImageSrc = Logo; // Adjust if you have a separate signature image
 
-  // Modern header with gradient and better spacing
+  // Determine customer details, prioritizing businessId properties if available
+  const customerContactName = quotation.businessId?.contactName || quotation.contactName || "N/A";
+  const customerPhone = quotation.mobileNumber || quotation.businessId?.mobileNumber || quotation.businessId?.phone || "N/A";
+  const customerEmail = quotation.businessId?.email || quotation.email || "N/A";
+  const customerGSTIN = quotation.businessId?.gstin || quotation.gstin || "N/A";
+  const customerAddress = quotation.businessId?.address?.replace(/\n/g, '<br>') || quotation.businessInfo?.replace(/\n/g, '<br>') || "N/A";
+
+
+  // Common header HTML for both pages to maintain consistency
   const commonHeaderHtml = `
     <div style="margin-bottom: 20px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
@@ -88,14 +123,14 @@ const generateQuotationHtmlParts = (quotation) => {
           <div>
             <h2 style="margin: 0; font-size: 20px; font-weight: 600; color: #2c3e50; margin-bottom: 5px;">ACE AUTOMATION</h2>
             <p style="margin: 2px 0; font-size: 10px; color: #555;">S.F. No. 91, 14B, Padiveedu Thottam,</p>
-            <p style="margin: 2px 0; font-size: 10px; color: #555;">Kalapatty road, Saravanampatti (PO),</p>
+            <p style="2px 0; font-size: 10px; color: #555;">Kalapatty road, Saravanampatti (PO),</p>
             <p style="margin: 2px 0; font-size: 10px; color: #555;">Coimbatore - 641 035. TN, INDIA.</p>
             <p style="margin: 2px 0; font-size: 10px; color: #555;">+91 98422 53389 | aceautomation.cbe@gmail.com</p>
-            <p style="margin: 2px 0; font-size: 10px; color: #555;">www.aceautomation.in | GST No. : 33AVDPD3093Q1ZD</p>
+            <p style="2px 0; font-size: 10px; color: #555;">www.aceautomation.in | GST No. : 33AVDPD3093Q1ZD</p>
           </div>
         </div>
 
-        <div style="background: linear-gradient(135deg, #ff6600, #ff8c00); color: white; padding: 15px 25px; font-weight: 600; font-size: 20px; text-align: center; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <div style="background: linear-gradient(135deg, #1e439e,rgb(51, 87, 175)); color: white; padding: 15px 25px; font-weight: 600; font-size: 20px; text-align: center; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
           QUOTATION
         </div>
       </div>
@@ -103,44 +138,53 @@ const generateQuotationHtmlParts = (quotation) => {
     </div>
   `;
 
-  // Page 1 with modern card-like design
+  // HTML for Page 1: Quotation details and itemized list
   const page1Html = `
-    <div style="padding: 20px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); background: white;">
+    <div style="padding: 15px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); background: white;">
       ${commonHeaderHtml}
 
-      <div style="margin-bottom: 25px; background: #f9fafb; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="margin-bottom: 20px; background: #f9fafb; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
         <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
           <tr>
             <td style="border: 1px solid #e0e0e0; padding: 8px; font-weight: 600; width: 25%; background: #f0f2f5;">Company Name</td>
-            <td style="border: 1px solid #e0e0e0; padding: 8px; width: 25%;">${quotation.businessName || "N/A"}</td>
+            <td style="border: 1px solid #e0e0e0; padding: 8px; width: 25%;">
+              ${quotation.businessName || "N/A"}
+            </td>
             <td style="border: 1px solid #e0e0e0; padding: 8px; font-weight: 600; width: 25%; background: #f0f2f5;">Date</td>
-            <td style="border: 1px solid #e0e0e0; padding: 8px; width: 25%;">${
-              quotation.date
-                ? new Date(quotation.date).toLocaleDateString("en-IN")
-                : new Date().toLocaleDateString("en-IN")
-            }</td>
+            <td style="border: 1px solid #e0e0e0; padding: 8px; width: 25%;">
+              ${quotation.date ? new Date(quotation.date).toLocaleDateString("en-IN") : new Date().toLocaleDateString("en-IN")}
+            </td>
           </tr>
           <tr>
             <td style="border: 1px solid #e0e0e0; padding: 8px; font-weight: 600; background: #f0f2f5;">Contact Person</td>
-            <td style="border: 1px solid #e0e0e0; padding: 8px;">${quotation.customerName || "N/A"}</td>
+            <td style="border: 1px solid #e0e0e0; padding: 8px;">
+              ${customerContactName}
+            </td>
             <td style="border: 1px solid #e0e0e0; padding: 8px; font-weight: 600; background: #f0f2f5;">Quotation No</td>
-            <td style="border: 1px solid #e0e0e0; padding: 8px;">${quotation.quotationNumber || "N/A"}</td>
+            <td style="border: 1px solid #e0e0e0; padding: 8px;">
+              ${quotation.quotationNumber || "N/A"}
+            </td>
           </tr>
           <tr>
             <td style="border: 1px solid #e0e0e0; padding: 8px; font-weight: 600; background: #f0f2f5;">Contact Number</td>
-            <td style="border: 1px solid #e0e0e0; padding: 8px;">${quotation.customerPhone || "N/A"}</td>
+            <td style="border: 1px solid #e0e0e0; padding: 8px;">
+              ${customerPhone} </td>
             <td style="border: 1px solid #e0e0e0; padding: 8px; font-weight: 600; background: #f0f2f5;">Customer GST No.</td>
-            <td style="border: 1px solid #e0e0e0; padding: 8px;">${quotation.gstin || "N/A"}</td>
+            <td style="border: 1px solid #e0e0e0; padding: 8px;">
+              ${customerGSTIN}
+            </td>
           </tr>
           <tr>
             <td style="border: 1px solid #e0e0e0; padding: 8px; font-weight: 600; background: #f0f2f5;">Contact Email</td>
-            <td style="border: 1px solid #e0e0e0; padding: 8px;" colspan="3">${quotation.customerEmail || "N/A"}</td>
+            <td style="border: 1px solid #e0e0e0; padding: 8px;" colspan="3">
+              ${customerEmail}
+            </td>
           </tr>
           <tr>
             <td style="border: 1px solid #e0e0e0; padding: 8px; font-weight: 600; background: #f0f2f5;">Address</td>
-            <td style="border: 1px solid #e0e0e0; padding: 8px;" colspan="3">${
-              quotation.businessInfo?.replace(/\n/g, '<br>') || "N/A"
-            }</td>
+            <td style="border: 1px solid #e0e0e0; padding: 8px;" colspan="3">
+              ${customerAddress}
+            </td>
           </tr>
         </table>
       </div>
@@ -148,40 +192,56 @@ const generateQuotationHtmlParts = (quotation) => {
       ${
         quotation.items?.length > 0
           ? `
-          <div style="margin-top: 25px; overflow: hidden; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+          <div style="margin-top: 20px; overflow: hidden; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
             <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; table-layout: fixed; font-size: 12px;">
               <colgroup>
-                <col style="width: 8%;"> <col style="width: 32%;"> <col style="width: 15%;"> <col style="width: 22.5%;"> <col style="width: 22.5%;"> </colgroup>
+                <col style="width: 5%;"> <col style="width: 20%;"> <col style="width: 25%;"> <col style="width: 10%;"> <col style="width: 17.5%;"> <col style="width: 17.5%;"> </colgroup>
               <thead>
                 <tr style="background: linear-gradient(135deg, #2c3e50, #34495e); color: white;">
-                  <th style="border: 1px solid #2c3e50; padding: 10px; text-align: center;">S.No</th>
-                  <th style="border: 1px solid #2c3e50; padding: 10px; text-align: left;">Description</th>
-                  <th style="border: 1px solid #2c3e50; padding: 10px; text-align: center;">Quantity</th>
-                  <th style="border: 1px solid #2c3e50; padding: 10px; text-align: right;">Unit Price (₹)</th>
-                  <th style="border: 1px solid #2c3e50; padding: 10px; text-align: right;">Total (₹)</th>
+                  <th style="border: 1px solid #2c3e50; padding: 8px; text-align: center;">S.No</th>
+                  <th style="border: 1px solid #2c3e50; padding: 8px; text-align: left;">Product Name</th>
+                  <th style="border: 1px solid #2c3e50; padding: 8px; text-align: left;">Description</th>
+                  <th style="border: 1px solid #2c3e50; padding: 8px; text-align: center;">Quantity</th>
+                  <th style="border: 1px solid #2c3e50; padding: 8px; text-align: right;">Unit Price (₹)</th>
+                  <th style="border: 1px solid #2c3e50; padding: 8px; text-align: right;">Total (₹)</th>
                 </tr>
               </thead>
               <tbody>
                 ${quotation.items
-                  .map(
-                    (item, idx) => `
-                    <tr style="${idx % 2 === 0 ? 'background: #fff;' : 'background: #f9fafb;'}">
-                      <td style="border: 1px solid #e0e0e0; padding: 10px; text-align: center; vertical-align: top;">${idx + 1}</td>
-                      <td style="border: 1px solid #e0e0e0; padding: 10px; text-align: left; vertical-align: top;">${
-                        item.description || "N/A"
-                      }</td>
-                      <td style="border: 1px solid #e0e0e0; padding: 10px; text-align: center; vertical-align: top;">${
-                        parseFloat(item.quantity) || 0
-                      }</td>
-                      <td style="border: 1px solid #e0e0e0; padding: 10px; text-align: right; vertical-align: top;">${formatCurrency(
-                        item.rate || 0
-                      )}</td>
-                      <td style="border: 1px solid #e0e0e0; padding: 10px; text-align: right; font-weight: 600; vertical-align: top;">
-                        ${formatCurrency((item.quantity || 0) * (item.rate || 0))}
-                      </td>
-                    </tr>
-                  `
-                  )
+                  .map((item, idx) => {
+                      const productName = item?.productName || "N/A";
+
+                      let itemSpecification = item?.description || "";
+                      if (!itemSpecification && item.specifications?.length > 0) {
+                          itemSpecification = item.specifications.map(s => `${s.name}: ${s.value}`).join(", ");
+                      }
+                      itemSpecification = itemSpecification || "N/A";
+
+                      const quantity = parseFloat(item.quantity) || 0;
+                      const rate = parseFloat(item.rate) || 0;
+                      const total = (quantity * rate).toFixed(2);
+
+                      return `
+                      <tr style="${idx % 2 === 0 ? 'background: #fff;' : 'background: #f9fafb;'}">
+                        <td style="border: 1px solid #e0e0e0; padding: 8px; text-align: center; vertical-align: top;">${idx + 1}</td>
+                        <td style="border: 1px solid #e0e0e0; padding: 8px; text-align: left; vertical-align: top;">
+                          ${productName}
+                        </td>
+                        <td style="border: 1px solid #e0e0e0; padding: 8px; text-align: left; vertical-align: top;">
+                          ${itemSpecification}
+                        </td>
+                        <td style="border: 1px solid #e0e0e0; padding: 8px; text-align: center; vertical-align: top;">
+                          ${quantity}
+                        </td>
+                        <td style="border: 1px solid #e0e0e0; padding: 8px; text-align: right; vertical-align: top;">${formatCurrency(
+                          rate
+                        )}</td>
+                        <td style="border: 1px solid #e0e0e0; padding: 8px; text-align: right; font-weight: 600; vertical-align: top;">
+                          ${formatCurrency(parseFloat(total))}
+                        </td>
+                      </tr>
+                    `;
+                  })
                   .join("")}
               </tbody>
             </table>
@@ -224,7 +284,7 @@ const generateQuotationHtmlParts = (quotation) => {
 
         <div style="margin: 15px 0;">
           <p style="margin: 5px 0; font-weight: 600; color: #2c3e50;">With Best Regards</p>
-          <p style="margin: 5px 0; color: #555;">For Ace Automation</p>
+          <p style="5px 0; color: #555;">For Ace Automation</p>
         </div>
       </div>
 
@@ -238,7 +298,7 @@ const generateQuotationHtmlParts = (quotation) => {
     </div>
   `;
 
-  // Page 2 with modern design
+  // Generate product specifications sections for Page 2, if items have specifications
   const productSpecificationsSections = quotation.items
     ?.filter(item => item.specifications && item.specifications.length > 0)
     .map(item => {
@@ -271,6 +331,7 @@ const generateQuotationHtmlParts = (quotation) => {
     })
     .join("");
 
+  // General terms and conditions HTML
   const generalTermsHtml = `
     <div style="margin-top: 20px; background: #f9fafb; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
       <div style="background: linear-gradient(135deg, #2c3e50, #34495e); color: white; padding: 8px 12px; font-weight: 600; font-size: 13px;">
@@ -303,8 +364,9 @@ const generateQuotationHtmlParts = (quotation) => {
     </div>
   `;
 
+  // HTML for Page 2: Product specifications (if any) and general terms
   const page2Html = `
-    <div style="padding: 20px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); background: white;">
+    <div style="padding: 15px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); background: white;">
       ${commonHeaderHtml}
 
       ${productSpecificationsSections}
@@ -316,7 +378,7 @@ const generateQuotationHtmlParts = (quotation) => {
 
         <div style="margin: 15px 0;">
           <p style="margin: 5px 0; font-weight: 600; color: #2c3e50;">With Best Regards</p>
-          <p style="margin: 5px 0; color: #555;">For Ace Automation</p>
+          <p style="5px 0; color: #555;">For Ace Automation</p>
         </div>
       </div>
 
@@ -333,6 +395,12 @@ const generateQuotationHtmlParts = (quotation) => {
   return { page1Html, page2Html };
 };
 
+/**
+ * Downloads the quotation as a PDF.
+ * It generates HTML content for two pages, converts them to canvases,
+ * and then adds them to a jsPDF document.
+ * @param {object} record - The quotation data object to be used for PDF generation.
+ */
 export const downloadQuotationPdf = async (record) => {
   const toastId = toast.loading("Generating PDF...", {
     position: "top-center",
@@ -342,68 +410,78 @@ export const downloadQuotationPdf = async (record) => {
   let tempDivPage2 = null;
 
   try {
+    // Generate HTML content for both pages using the provided record data
     const { page1Html, page2Html } = generateQuotationHtmlParts(record);
 
+    // Initialize jsPDF document
     const pdf = new jsPDF({
-      orientation: "portrait",
-      unit: "mm",
-      format: "a4",
-      hotfixes: ["px_scaling"]
+      orientation: "portrait", // Portrait orientation
+      unit: "mm",              // Units in millimeters
+      format: "a4",            // A4 page format
+      hotfixes: ["px_scaling"] // Apply hotfixes for pixel scaling issues
     });
 
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = pdf.internal.pageSize.getHeight();
-    const padding = 10;
+    const padding = 7; // Reduced global padding around the content on the PDF page
 
     // --- Render Page 1 ---
+    // Create a temporary div element to render HTML content for html2canvas
     tempDivPage1 = document.createElement("div");
-    tempDivPage1.style.position = "fixed";
+    tempDivPage1.style.position = "fixed"; // Position off-screen
     tempDivPage1.style.top = "-9999px";
     tempDivPage1.style.left = "-9999px";
-    tempDivPage1.style.width = `${pdfWidth - 2 * padding}mm`;
-    tempDivPage1.style.padding = `${padding}mm`;
+    tempDivPage1.style.width = `${pdfWidth - 2 * padding}mm`; // Set width to match PDF content area, accounting for new padding
+    tempDivPage1.style.padding = '0'; // HTML padding is handled within the HTML string, set this to 0 for strict width control
     tempDivPage1.style.background = "white";
-    tempDivPage1.style.zIndex = "-1";
-    tempDivPage1.style.display = "block";
-    tempDivPage1.innerHTML = page1Html;
-    document.body.appendChild(tempDivPage1);
+    tempDivPage1.style.zIndex = "-1"; // Ensure it's behind other elements
+    tempDivPage1.style.display = "block"; // Make sure it's visible for rendering
+    tempDivPage1.innerHTML = page1Html; // Set the HTML content
+    document.body.appendChild(tempDivPage1); // Append to body
 
+    // Small delay to allow the browser to render the HTML before capturing
     await new Promise((resolve) => setTimeout(resolve, 200));
 
+    // Convert the HTML div to a canvas image
     const canvasPage1 = await html2canvas(tempDivPage1, {
-      scale: 3,
-      useCORS: true,
-      logging: false,
-      allowTaint: true,
-      letterRendering: true,
-      backgroundColor: "#ffffff"
+      scale: 3, // Higher scale for better quality in PDF
+      useCORS: true, // Enable CORS for images (like the logo)
+      logging: false, // Disable html2canvas logging
+      allowTaint: true, // Allow images from other origins to "taint" the canvas (needed with useCORS)
+      letterRendering: true, // Improve text rendering
+      backgroundColor: "#ffffff" // Ensure white background
     });
 
+    // Get image data from canvas and calculate dimensions for PDF
     const imgDataPage1 = canvasPage1.toDataURL("image/png", 1.0);
     const imgPropsPage1 = pdf.getImageProperties(imgDataPage1);
     const imgHeightPage1 = (imgPropsPage1.height * (pdfWidth - 2 * padding)) / imgPropsPage1.width;
 
+    // Add the image to the PDF using the reduced padding
     pdf.addImage(imgDataPage1, "PNG", padding, padding, pdfWidth - 2 * padding, imgHeightPage1);
 
     // --- Render Page 2 ---
-    pdf.addPage();
+    pdf.addPage(); // Add a new page for the second HTML part
 
+    // Create another temporary div for Page 2
     tempDivPage2 = document.createElement("div");
     tempDivPage2.style.position = "fixed";
     tempDivPage2.style.top = "-9999px";
     tempDivPage2.style.left = "-9999px";
-    tempDivPage2.style.width = `${pdfWidth - 2 * padding}mm`;
-    tempDivPage2.style.padding = `${padding}mm`;
+    tempDivPage2.style.width = `${pdfWidth - 2 * padding}mm`; // Account for new padding
+    tempDivPage2.style.padding = '0';
     tempDivPage2.style.background = "white";
     tempDivPage2.style.zIndex = "-1";
     tempDivPage2.style.display = "block";
     tempDivPage2.innerHTML = page2Html;
     document.body.appendChild(tempDivPage2);
 
+    // Small delay for rendering
     await new Promise((resolve) => setTimeout(resolve, 200));
 
+    // Convert Page 2 HTML to canvas
     const canvasPage2 = await html2canvas(tempDivPage2, {
-      scale: 3,
+      scale: 3, // Higher scale for better quality
       useCORS: true,
       logging: false,
       allowTaint: true,
@@ -411,18 +489,22 @@ export const downloadQuotationPdf = async (record) => {
       backgroundColor: "#ffffff"
     });
 
+    // Get image data and calculate dimensions for Page 2
     const imgDataPage2 = canvasPage2.toDataURL("image/png", 1.0);
     const imgPropsPage2 = pdf.getImageProperties(imgDataPage2);
     const imgHeightPage2 = (imgPropsPage2.height * (pdfWidth - 2 * padding)) / imgPropsPage2.width;
 
+    // Add Page 2 image to the PDF using the reduced padding
     pdf.addImage(imgDataPage2, "PNG", padding, padding, pdfWidth - 2 * padding, imgHeightPage2);
 
+    // Save the PDF with a dynamic filename
     pdf.save(`${record.quotationNumber || "quotation"}_${new Date().toISOString().slice(0,10)}.pdf`);
     toast.success("PDF downloaded successfully!", { id: toastId });
   } catch (err) {
     console.error("Failed to generate PDF:", err);
     toast.error("Failed to generate PDF. Please try again.", { id: toastId });
   } finally {
+    // Clean up temporary divs from the DOM to prevent memory leaks and visual issues
     if (tempDivPage1 && document.body.contains(tempDivPage1)) {
       document.body.removeChild(tempDivPage1);
     }

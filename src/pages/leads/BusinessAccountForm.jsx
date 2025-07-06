@@ -104,7 +104,7 @@ const BusinessAccountForm = ({ visible, onClose, onSave, initialValues, allUsers
         </Row>
         <Row gutter={16}>
           <Col span={12}>
-            <Form.Item name="contactName" label="Contact Person Name" rules={[{ required: true, message: 'Please enter contact person name' }]}>
+            <Form.Item name="contactName" label="Customer Name" rules={[{ required: true, message: 'Please enter contact person name' }]}>
               <Input placeholder="Contact Person Name" />
             </Form.Item>
           </Col>

@@ -132,7 +132,7 @@ const Sidebar = ({ collapsed }) => {
           src={collapsed ? logoCollapsed : logoExpanded}
           alt="Logo"
           style={{
-            height: 40,
+            height: 59,
             width: "auto",
             transition: "all 0.3s",
           }}
